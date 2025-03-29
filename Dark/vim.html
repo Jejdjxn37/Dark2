@@ -1,0 +1,1151 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Dark Chat - تطبيق تواصل اجتماعي</title>
+  <!-- تحميل خط "Cairo" لدعم الواجهة العربية العصرية -->
+  <link href="https://fonts.googleapis.com/css?family=Cairo:400,600&display=swap" rel="stylesheet">
+  <!-- تضمين مكتبة Socket.IO (تأكد من تشغيل الخادم) -->
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    /* تعريف متغيرات الألوان بأسلوب عصري */
+    :root {
+      --primary-color: #7289da;
+      --secondary-color: #36393f;
+      --accent-color: #99aab5;
+      --text-color: #dcddde;
+      --background-color: #2f3136;
+      --header-bg: #202225;
+      --modal-bg: #2f3136;
+      --input-bg: #40444b;
+      --button-bg: var(--primary-color);
+    }
+    * {
+      box-sizing: border-box;
+      font-family: 'Cairo', sans-serif;
+    }
+    body {
+      margin: 0;
+      background-color: var(--background-color);
+      color: var(--text-color);
+      direction: rtl;
+    }
+    .hidden { display: none; }
+    /* --- شاشات عامة --- */
+    .screen {
+      padding: 20px;
+      min-height: 100vh;
+    }
+    /* --- تنسيق حقول الإدخال والأزرار --- */
+    input, select, button {
+      border: none;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 16px;
+      margin: 5px 0;
+    }
+    input, select {
+      width: 100%;
+      background-color: var(--input-bg);
+      color: var(--text-color);
+    }
+    button {
+      background-color: var(--button-bg);
+      color: #fff;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+    button:hover { background-color: #5b6eae; }
+    a { color: var(--primary-color); cursor: pointer; text-decoration: none; }
+    /* --- رأس شاشة تسجيل الدخول --- */
+    .login-header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    .login-header img {
+      width: 60px;
+      height: 60px;
+      border-radius: 50%;
+      vertical-align: middle;
+      margin-left: 10px;
+    }
+    .login-header h1 {
+      display: inline;
+      font-size: 28px;
+      vertical-align: middle;
+      margin: 0;
+    }
+    /* --- شاشة تسجيل الدخول والتسجيل --- */
+    .auth-container {
+      max-width: 400px;
+      margin: 50px auto;
+      background-color: var(--secondary-color);
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+      text-align: center;
+    }
+    .auth-container h2 { margin-bottom: 20px; }
+    /* --- تخطيط الشاشة الرئيسية (Sidebar + Content) --- */
+    .main-layout {
+      display: flex;
+      height: calc(100vh - 70px);
+    }
+    .sidebar {
+      width: 250px;
+      background-color: var(--secondary-color);
+      padding: 20px;
+      overflow-y: auto;
+      border-right: 1px solid var(--header-bg);
+    }
+    .content {
+      flex-grow: 1;
+      background-color: var(--background-color);
+      padding: 20px;
+      overflow-y: auto;
+    }
+    .header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background-color: var(--header-bg);
+      padding: 10px 20px;
+      border-bottom: 1px solid var(--header-bg);
+      box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+    }
+    .header .title {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .header .icons button {
+      background: none;
+      border: none;
+      color: var(--text-color);
+      font-size: 24px;
+      margin: 0 5px;
+      cursor: pointer;
+    }
+    /* --- قائمة الغرف في Sidebar --- */
+    .sidebar .room-item {
+      padding: 10px;
+      margin-bottom: 8px;
+      background-color: var(--input-bg);
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+    .sidebar .room-item:hover { background-color: var(--button-bg); }
+    .sidebar .room-item span.delete-btn {
+      float: left;
+      background: red;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 12px;
+      display: none;
+      cursor: pointer;
+    }
+    .sidebar .room-item:hover span.delete-btn { display: inline; }
+    /* --- تصميم غرفة الدردشة --- */
+    .chat-header {
+      padding: 10px;
+      background-color: var(--header-bg);
+      border-bottom: 1px solid var(--header-bg);
+    }
+    .chat-messages {
+      height: calc(100vh - 200px);
+      overflow-y: auto;
+      padding: 10px;
+      background-color: var(--background-color);
+    }
+    .chat-message {
+      margin-bottom: 10px;
+      padding: 8px;
+      background-color: var(--input-bg);
+      border-radius: 6px;
+      position: relative;
+    }
+    .chat-message button { font-size: 12px; margin-left: 5px; }
+    #typing-indicator { font-style: italic; margin: 5px 0; }
+    /* --- تصميم النوافذ (المودالات) --- */
+    .modal {
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      width: 90%;
+      max-width: 500px;
+      transform: translate(-50%, -50%);
+      background-color: var(--modal-bg);
+      border: 1px solid var(--header-bg);
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.6);
+      z-index: 1000;
+      text-align: center;
+    }
+    .modal h3 { margin-top: 0; }
+    .modal-close {
+      float: right;
+      font-size: 18px;
+      cursor: pointer;
+      color: red;
+    }
+    /* --- إشعار إنشاء الحساب --- */
+    #account-created-modal img {
+      display: block;
+      margin: 0 auto 10px;
+      width: 100px;
+      height: 100px;
+      border-radius: 50%;
+    }
+    /* --- شريط التمرير المخصص --- */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: var(--secondary-color); }
+    ::-webkit-scrollbar-thumb { background: var(--button-bg); border-radius: 4px; }
+    /* --- تحسين استجابة التصميم --- */
+    @media (max-width: 768px) {
+      .main-layout { flex-direction: column; }
+      .sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--header-bg); }
+    }
+  </style>
+</head>
+<body>
+  <!-- شاشة تسجيل الدخول -->
+  <div id="login-screen" class="screen">
+    <div class="auth-container">
+      <div class="login-header">
+        <img src="https://via.placeholder.com/60?text=Logo" alt="Logo">
+        <h1>Dark Chat</h1>
+      </div>
+      <h2>تسجيل الدخول</h2>
+      <input type="text" id="login-username" placeholder="اسم المستخدم">
+      <input type="password" id="login-password" placeholder="كلمة السر">
+      <button id="login-button">تسجيل دخول</button>
+      <p><a id="go-to-register">إنشاء حساب</a></p>
+      <p id="login-error" style="color:red;"></p>
+    </div>
+  </div>
+  
+  <!-- شاشة إنشاء الحساب -->
+  <div id="register-screen" class="screen hidden">
+    <div class="auth-container">
+      <h2>إنشاء حساب</h2>
+      <input type="text" id="register-username" placeholder="اسم المستخدم">
+      <input type="text" id="register-name" placeholder="الاسم">
+      <input type="password" id="register-password" placeholder="كلمة السر">
+      <input type="password" id="register-confirm-password" placeholder="تأكيد كلمة السر">
+      <button id="register-button">إنشاء حساب</button>
+      <p><a id="back-to-login">الرجوع إلى تسجيل الدخول</a></p>
+      <p id="register-error" style="color:red;"></p>
+    </div>
+  </div>
+  
+  <!-- إشعار إنشاء الحساب (Modal) -->
+  <div id="account-created-modal" class="modal hidden">
+    <span class="modal-close" id="close-account-created-modal">✖</span>
+    <img src="https://via.placeholder.com/100?text=Dark+Chat" alt="Dark Chat Logo">
+    <h3>Dark Chat</h3>
+    <p>تم إنشاء الحساب بنجاح</p>
+    <button id="dismiss-account-created">تم</button>
+  </div>
+  
+  <!-- الشاشة الرئيسية (Sidebar + Content) -->
+  <div id="main-screen" class="screen hidden">
+    <div class="header">
+      <div class="title">
+        <img id="user-avatar" src="" alt="Avatar" style="width:40px; height:40px; border-radius:50%; vertical-align:middle; margin-left:10px;">
+        Dark Chat
+      </div>
+      <div class="icons">
+        <button class="icon-button" id="admin-icon" title="لوحة الإدارة" style="display:none;">👑</button>
+        <button class="icon-button" id="settings-icon" title="الإعدادات">⚙️</button>
+        <button class="icon-button" id="chat-icon" title="غرفة الدردشة">💬</button>
+        <button class="icon-button" id="voice-icon" title="غرفة الفويس">🎙️</button>
+        <button class="icon-button" id="logout-button" title="تسجيل الخروج">🚪</button>
+      </div>
+    </div>
+    <div class="main-layout">
+      <div class="sidebar" id="rooms-sidebar">
+        <h4>الغرف المحفوظة</h4>
+        <!-- قائمة الغرف تظهر هنا -->
+      </div>
+      <div class="content" id="content-area">
+        <!-- هنا سيتم عرض غرفة الدردشة أو الفويس -->
+      </div>
+    </div>
+  </div>
+  
+  <!-- شاشة إدخال شيفرة غرفة الدردشة -->
+  <div id="chat-code-screen" class="screen hidden">
+    <div class="auth-container">
+      <h2>شيفرة غرفة الدردشة</h2>
+      <input type="text" id="chat-code-input" placeholder="أدخل الشيفرة">
+      <button id="enter-chat-code">Yes</button>
+      <button id="cancel-chat-code">No</button>
+      <p id="chat-code-error" style="color:red;"></p>
+    </div>
+  </div>
+  
+  <!-- غرفة الدردشة (Real‑time) -->
+  <div id="chat-room-screen" class="screen hidden">
+    <div class="chat-header">
+      <span id="chat-room-code" style="font-weight:600;"></span>
+      <button class="icon-button" id="back-from-chat-room" title="رجوع">←</button>
+    </div>
+    <div class="chat-messages" id="chat-messages"></div>
+    <div id="typing-indicator"></div>
+    <input type="text" id="chat-input" placeholder="اكتب رسالتك هنا">
+    <button id="send-chat-message">إرسال</button>
+    <button id="send-file-chat">إرسال صورة/ملف</button>
+  </div>
+  
+  <!-- شاشة إدخال شيفرة غرفة الفويس -->
+  <div id="voice-code-screen" class="screen hidden">
+    <div class="auth-container">
+      <h2>شيفرة غرفة الفويس</h2>
+      <input type="text" id="voice-code-input" placeholder="أدخل الشيفرة">
+      <button id="enter-voice-code">Yes</button>
+      <button id="cancel-voice-code">No</button>
+      <p id="voice-code-error" style="color:red;"></p>
+    </div>
+  </div>
+  
+  <!-- غرفة الفويس -->
+  <div id="voice-room-screen" class="screen hidden">
+    <div class="chat-header">
+      <span id="voice-room-code" style="font-weight:600;"></span>
+      <button class="icon-button" id="back-from-voice-room" title="رجوع">←</button>
+    </div>
+    <div id="voice-participants" style="padding:20px;"></div>
+    <div style="text-align:center; margin-top:20px;">
+      <button class="icon-button" id="mic-button" title="الميك">🎤</button>
+      <button class="icon-button" id="speaker-button" title="السماعة">🎧</button>
+      <button class="icon-button" id="exit-voice-room" title="مغادرة">🚪</button>
+    </div>
+  </div>
+  
+  <!-- شاشة الإدارة (للأدمن) -->
+  <div id="admin-screen" class="screen hidden">
+    <div class="modal">
+      <span class="modal-close" id="back-from-admin">←</span>
+      <h3>لوحة الإدارة</h3>
+      <div class="menu">
+        <div class="menu-item" id="broadcast-all">إرسال تعميم لجميع المستخدمين</div>
+        <div class="menu-item" id="broadcast-user">إرسال تعميم لمستخدم</div>
+        <div class="menu-item" id="manage-users">إدارة حسابات المستخدمين</div>
+        <div class="menu-item" id="ban-management">إدارة الحضر</div>
+        <div class="menu-item" id="add-admin">إضافة إداري</div>
+        <div class="menu-item" id="admin-support">الدعم</div>
+        <div class="menu-item" id="clear-chats">تصفيت جميع الشاتات</div>
+        <div class="menu-item" id="grant-permission">إعطاء إذن</div>
+        <div class="menu-item" id="remove-permission">إزالة إذن</div>
+      </div>
+    </div>
+  </div>
+  
+  <!-- مودالات الإعدادات المختلفة -->
+  <div id="profile-modal" class="modal hidden">
+    <span class="modal-close" id="close-profile-modal">✖</span>
+    <h3>تعديل الملف الشخصي</h3>
+    <div class="settings-option">
+      <p>تعديل الاسم:</p>
+      <input type="text" id="new-name" placeholder="الاسم الجديد">
+      <button id="update-name">Yes</button>
+      <button id="cancel-update-name">No</button>
+    </div>
+    <div class="settings-option">
+      <p>تعديل اليوزر (بحاجة إلى كلمة السر الحالية):</p>
+      <input type="password" id="current-password-username" placeholder="كلمة السر الحالية">
+      <input type="text" id="new-username" placeholder="يوزر جديد">
+      <button id="update-username">Yes</button>
+      <button id="cancel-update-username">No</button>
+    </div>
+    <div class="settings-option">
+      <p>تعديل كلمة السر (بحاجة إلى كلمة السر الحالية):</p>
+      <input type="password" id="current-password-pass" placeholder="كلمة السر الحالية">
+      <input type="password" id="new-password" placeholder="كلمة سر جديدة">
+      <button id="update-password">Yes</button>
+      <button id="cancel-update-password">No</button>
+    </div>
+    <div class="settings-option">
+      <p>تحديث الصورة الشخصية (رابط URL):</p>
+      <input type="text" id="new-avatar" placeholder="أدخل رابط الصورة">
+      <button id="update-avatar">Yes</button>
+      <button id="cancel-update-avatar">No</button>
+    </div>
+  </div>
+  
+  <div id="language-modal" class="modal hidden">
+    <span class="modal-close" id="close-language-modal">✖</span>
+    <h3>تغيير اللغة</h3>
+    <select id="language-select">
+      <option value="ar">العربية</option>
+      <option value="en">English</option>
+      <option value="ru">Русский</option>
+    </select>
+    <button id="save-language">حفظ</button>
+  </div>
+  
+  <div id="sound-modal" class="modal hidden">
+    <span class="modal-close" id="close-sound-modal">✖</span>
+    <h3>إعدادات الصوت</h3>
+    <div class="settings-option">
+      <p>مستوى المايك:</p>
+      <input type="range" id="mic-volume" min="0" max="100" value="50">
+    </div>
+    <div class="settings-option">
+      <p>مستوى السماعة:</p>
+      <input type="range" id="speaker-volume" min="0" max="100" value="50">
+    </div>
+    <div class="settings-option">
+      <p>وضع المايك:</p>
+      <select id="mic-mode">
+        <option value="press">ضغط للتحدث</option>
+        <option value="toggle">مفتوح دائم</option>
+      </select>
+    </div>
+    <button id="save-sound-settings">حفظ</button>
+  </div>
+  
+  <div id="text-modal" class="modal hidden">
+    <span class="modal-close" id="close-text-modal">✖</span>
+    <h3>إعدادات النص</h3>
+    <div class="settings-option">
+      <p>حجم الخط:</p>
+      <input type="range" id="font-size-range" min="12" max="24" value="16">
+    </div>
+    <button id="save-text-settings">حفظ</button>
+  </div>
+  
+  <div id="appearance-modal" class="modal hidden">
+    <span class="modal-close" id="close-appearance-modal">✖</span>
+    <h3>إعدادات المظهر</h3>
+    <div class="settings-option">
+      <p>الخلفية:</p>
+      <select id="background-select">
+        <option value="dark">أسود</option>
+        <option value="light">أبيض</option>
+      </select>
+    </div>
+    <div class="settings-option">
+      <p>لون الأزرار:</p>
+      <select id="button-color-select">
+        <option value="blue">أزرق</option>
+        <option value="yellow">أصفر</option>
+      </select>
+    </div>
+    <button id="save-appearance-settings">حفظ</button>
+  </div>
+  
+  <div id="support-modal" class="modal hidden" style="max-width:600px; height:70vh; overflow:auto;">
+    <span class="modal-close" id="close-support-modal">✖</span>
+    <h3>الدعم</h3>
+    <div id="support-messages" style="height:300px; overflow-y:auto; border:1px solid var(--header-bg); padding:10px; margin-bottom:10px;"></div>
+    <input type="text" id="support-input" placeholder="اكتب رسالتك">
+    <button id="send-support-message">إرسال</button>
+  </div>
+  
+  <div id="user-management-modal" class="modal hidden" style="max-width:600px; height:70vh; overflow:auto;">
+    <span class="modal-close" id="close-user-management-modal">✖</span>
+    <h3>إدارة حسابات المستخدمين</h3>
+    <input type="text" id="user-search" placeholder="ابحث عن مستخدم">
+    <div id="user-list" style="margin-top:10px;"></div>
+  </div>
+  
+  <script>
+    /***** الحالة العامة والتخزين المحلي *****/
+    // عند تحميل الصفحة يتم استرجاع البيانات من localStorage
+    let currentUser = null;
+    let users = JSON.parse(localStorage.getItem('users')) || {};
+    let chats = JSON.parse(localStorage.getItem('chats')) || {};
+    let voiceRooms = JSON.parse(localStorage.getItem('voiceRooms')) || {};
+    let bannedUsers = JSON.parse(localStorage.getItem('bannedUsers')) || {};
+    let permissions = JSON.parse(localStorage.getItem('permissions')) || {};
+    let userSettings = JSON.parse(localStorage.getItem('userSettings')) || {
+      language: 'ar',
+      micVolume: 50,
+      speakerVolume: 50,
+      micMode: 'press',
+      fontSize: 16,
+      background: 'dark',
+      buttonColor: 'blue'
+    };
+    
+    // دالة لتحديث البيانات من localStorage (مهمة عند محاولة تسجيل الدخول)
+    function refreshUsers() {
+      users = JSON.parse(localStorage.getItem('users')) || {};
+      bannedUsers = JSON.parse(localStorage.getItem('bannedUsers')) || {};
+    }
+    
+    // سيتم إنشاء اتصال Socket.IO بعد تسجيل الدخول
+    let socket = null;
+    
+    function saveData() {
+      localStorage.setItem('users', JSON.stringify(users));
+      localStorage.setItem('chats', JSON.stringify(chats));
+      localStorage.setItem('voiceRooms', JSON.stringify(voiceRooms));
+      localStorage.setItem('bannedUsers', JSON.stringify(bannedUsers));
+      localStorage.setItem('permissions', JSON.stringify(permissions));
+      localStorage.setItem('userSettings', JSON.stringify(userSettings));
+    }
+    
+    function showScreen(screenId) {
+      document.querySelectorAll('.screen').forEach(screen => screen.classList.add('hidden'));
+      document.getElementById(screenId).classList.remove('hidden');
+      if(screenId === 'main-screen') updateJoinedRooms();
+    }
+    
+    /***** تسجيل الدخول والتسجيل *****/
+    document.getElementById('go-to-register').addEventListener('click', e => {
+      e.preventDefault();
+      showScreen('register-screen');
+    });
+    document.getElementById('back-to-login').addEventListener('click', e => {
+      e.preventDefault();
+      showScreen('login-screen');
+    });
+    
+    // إنشاء حساب جديد
+    document.getElementById('register-button').addEventListener('click', () => {
+      const username = document.getElementById('register-username').value.trim();
+      const name = document.getElementById('register-name').value.trim();
+      const password = document.getElementById('register-password').value;
+      const confirmPassword = document.getElementById('register-confirm-password').value;
+      const errorP = document.getElementById('register-error');
+      errorP.textContent = '';
+    
+      if(username.length < 3) {
+        errorP.textContent = 'اسم المستخدم يجب أن يكون 3 أحرف على الأقل.';
+        return;
+      }
+      if(password.length < 6) {
+        errorP.textContent = 'كلمة السر يجب أن تكون 6 أحرف على الأقل.';
+        return;
+      }
+      if(password !== confirmPassword) {
+        errorP.textContent = 'كلمتا السر غير متطابقتين.';
+        return;
+      }
+      if(users[username]) {
+        errorP.textContent = 'اسم المستخدم موجود بالفعل.';
+        return;
+      }
+      users[username] = {
+        username,
+        name,
+        password,
+        createdAt: new Date().toISOString(),
+        isAdmin: false,
+        chats: [],
+        voiceRooms: [],
+        avatar: ""
+      };
+      saveData();
+      alert('تم إنشاء الحساب بنجاح.');
+      document.getElementById('account-created-modal').classList.remove('hidden');
+    });
+    
+    document.getElementById('dismiss-account-created').addEventListener('click', () => {
+      document.getElementById('account-created-modal').classList.add('hidden');
+      showScreen('login-screen');
+    });
+    document.getElementById('close-account-created-modal').addEventListener('click', () => {
+      document.getElementById('account-created-modal').classList.add('hidden');
+      showScreen('login-screen');
+    });
+    
+    // تسجيل الدخول
+    document.getElementById('login-button').addEventListener('click', () => {
+      // تحديث بيانات المستخدمين من localStorage
+      refreshUsers();
+      const username = document.getElementById('login-username').value.trim();
+      const password = document.getElementById('login-password').value;
+      const errorP = document.getElementById('login-error');
+      errorP.textContent = '';
+    
+      if(bannedUsers[username]) {
+        errorP.textContent = 'تم حضرك من قبل الإدارة.';
+        return;
+      }
+      if(users[username] && users[username].password === password) {
+        currentUser = users[username];
+        document.getElementById('welcome-name').textContent = currentUser.name;
+        document.getElementById('admin-icon').style.display = currentUser.isAdmin ? 'inline-block' : 'none';
+        applyUserSettings();
+        document.getElementById('user-avatar').src = currentUser.avatar || '';
+        // إنشاء اتصال Socket.IO بعد تسجيل الدخول
+        socket = io();
+        showScreen('main-screen');
+      } else {
+        errorP.textContent = 'بيانات الدخول غير صحيحة.';
+      }
+    });
+    
+    // تسجيل الخروج
+    document.getElementById('logout-button').addEventListener('click', () => {
+      currentUser = null;
+      if(socket) { socket.disconnect(); socket = null; }
+      showScreen('login-screen');
+    });
+    
+    /***** تطبيق إعدادات المستخدم على الواجهة *****/
+    function applyUserSettings() {
+      document.body.style.fontSize = userSettings.fontSize + 'px';
+      if(userSettings.background === 'dark') {
+        document.body.style.backgroundColor = '#2f3136';
+      } else {
+        document.body.style.backgroundColor = '#fff';
+      }
+      document.querySelectorAll('button').forEach(btn => {
+        if(userSettings.buttonColor === 'blue') {
+          btn.style.backgroundColor = 'var(--primary-color)';
+          btn.style.color = '#fff';
+        } else {
+          btn.style.backgroundColor = 'yellow';
+          btn.style.color = '#000';
+        }
+      });
+    }
+    
+    /***** تحديث قائمة الغرف في Sidebar *****/
+    function updateJoinedRooms() {
+      const sidebar = document.getElementById('rooms-sidebar');
+      sidebar.innerHTML = '<h4>الغرف المحفوظة</h4>';
+      if(currentUser) {
+        currentUser.chats.forEach(code => {
+          const roomDiv = document.createElement('div');
+          roomDiv.className = 'room-item';
+          roomDiv.innerHTML = `<span class="delete-btn" data-type="chat" data-code="${code}">حذف</span>شات: ${code}`;
+          roomDiv.addEventListener('click', () => {
+            document.getElementById('chat-room-code').textContent = code;
+            loadChatMessages(code);
+            if(socket) { socket.emit('joinRoom', code); }
+            showScreen('chat-room-screen');
+          });
+          sidebar.appendChild(roomDiv);
+        });
+        currentUser.voiceRooms.forEach(code => {
+          const roomDiv = document.createElement('div');
+          roomDiv.className = 'room-item';
+          roomDiv.innerHTML = `<span class="delete-btn" data-type="voice" data-code="${code}">حذف</span>فويس: ${code}`;
+          roomDiv.addEventListener('click', () => {
+            document.getElementById('voice-room-code').textContent = code;
+            loadVoiceParticipants(code);
+            showScreen('voice-room-screen');
+          });
+          sidebar.appendChild(roomDiv);
+        });
+      }
+      document.querySelectorAll('.delete-btn').forEach(btn => {
+        btn.addEventListener('click', e => {
+          e.stopPropagation();
+          const type = btn.getAttribute('data-type');
+          const code = btn.getAttribute('data-code');
+          if(confirm('هل تريد حذف هذا العنصر من الواجهة؟')) {
+            if(type === 'chat') {
+              currentUser.chats = currentUser.chats.filter(c => c !== code);
+            } else {
+              currentUser.voiceRooms = currentUser.voiceRooms.filter(c => c !== code);
+            }
+            users[currentUser.username] = currentUser;
+            saveData();
+            updateJoinedRooms();
+          }
+        });
+      });
+    }
+    
+    /***** غرفة الدردشة (real‑time) *****/
+    document.getElementById('chat-icon').addEventListener('click', () => showScreen('chat-code-screen'));
+    document.getElementById('cancel-chat-code').addEventListener('click', () => showScreen('main-screen'));
+    document.getElementById('enter-chat-code').addEventListener('click', () => {
+      const code = document.getElementById('chat-code-input').value.trim();
+      const errorP = document.getElementById('chat-code-error');
+      errorP.textContent = '';
+      if(!code) {
+        errorP.textContent = 'الرجاء إدخال الشيفرة.';
+        return;
+      }
+      if(!chats[code]) {
+        chats[code] = { code, messages: [] };
+        saveData();
+      }
+      if(!currentUser.chats.includes(code)) {
+        currentUser.chats.push(code);
+        users[currentUser.username] = currentUser;
+        saveData();
+      }
+      document.getElementById('chat-room-code').textContent = code;
+      loadChatMessages(code);
+      if(socket) { socket.emit('joinRoom', code); }
+      showScreen('chat-room-screen');
+    });
+    
+    function loadChatMessages(code) {
+      const chatDiv = document.getElementById('chat-messages');
+      chatDiv.innerHTML = '';
+      if(chats[code] && chats[code].messages) {
+        chats[code].messages.forEach(msg => {
+          addChatMessage(msg, false);
+        });
+      }
+    }
+    
+    function addChatMessage(msg, saveLocal = true) {
+      const chatDiv = document.getElementById('chat-messages');
+      const msgDiv = document.createElement('div');
+      msgDiv.className = 'chat-message';
+      if(users[msg.sender] && users[msg.sender].avatar) {
+        const avatarImg = document.createElement('img');
+        avatarImg.src = users[msg.sender].avatar;
+        avatarImg.style.width = '20px';
+        avatarImg.style.height = '20px';
+        avatarImg.style.borderRadius = '50%';
+        avatarImg.style.marginRight = '5px';
+        msgDiv.appendChild(avatarImg);
+      }
+      const contentSpan = document.createElement('span');
+      contentSpan.textContent = msg.sender + ': ' + msg.text;
+      msgDiv.appendChild(contentSpan);
+      if(msg.sender === currentUser.username) {
+        const editBtn = document.createElement('button');
+        editBtn.textContent = 'Edit';
+        editBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          const newText = prompt('تعديل الرسالة:', msg.text);
+          if(newText) {
+            msg.text = newText;
+            saveData();
+            loadChatMessages(document.getElementById('chat-room-code').textContent);
+          }
+        });
+        msgDiv.appendChild(editBtn);
+        const deleteBtn = document.createElement('button');
+        deleteBtn.textContent = 'Delete';
+        deleteBtn.addEventListener('click', e => {
+          e.stopPropagation();
+          if(confirm('هل تريد حذف الرسالة؟')) {
+            const roomCode = document.getElementById('chat-room-code').textContent;
+            chats[roomCode].messages.splice(chats[roomCode].messages.indexOf(msg), 1);
+            saveData();
+            loadChatMessages(roomCode);
+          }
+        });
+        msgDiv.appendChild(deleteBtn);
+      }
+      chatDiv.appendChild(msgDiv);
+      if(saveLocal) {
+        const roomCode = document.getElementById('chat-room-code').textContent;
+        if(!chats[roomCode].messages) chats[roomCode].messages = [];
+        chats[roomCode].messages.push(msg);
+        saveData();
+      }
+    }
+    
+    document.getElementById('send-chat-message').addEventListener('click', () => {
+      const input = document.getElementById('chat-input');
+      const text = input.value.trim();
+      if(!text) return;
+      const roomCode = document.getElementById('chat-room-code').textContent;
+      const msg = { sender: currentUser.username, text, timestamp: new Date().toISOString(), room: roomCode };
+      if(socket) { socket.emit('chatMessage', msg); }
+      addChatMessage(msg);
+      input.value = '';
+      document.getElementById('typing-indicator').textContent = '';
+    });
+    
+    document.getElementById('send-file-chat').addEventListener('click', () => {
+      alert('ميزة إرسال الصور/الملفات قيد التطوير.');
+    });
+    
+    // استقبال الرسائل من الخادم عبر Socket.IO
+    function setupSocketListeners() {
+      if(socket) {
+        socket.on('message', data => {
+          const roomCode = document.getElementById('chat-room-code').textContent;
+          if(data.room === roomCode) { addChatMessage(data, false); }
+        });
+      }
+    }
+    setTimeout(setupSocketListeners, 1000);
+    
+    let typingTimer;
+    document.getElementById('chat-input').addEventListener('input', () => {
+      clearTimeout(typingTimer);
+      const indicator = document.getElementById('typing-indicator');
+      if(document.getElementById('chat-input').value.trim() !== ''){
+        indicator.textContent = 'أنت تكتب...';
+        typingTimer = setTimeout(() => { indicator.textContent = ''; }, 1000);
+      } else { indicator.textContent = ''; }
+    });
+    
+    /***** غرفة الفويس (محاكاة) *****/
+    document.getElementById('voice-icon').addEventListener('click', () => showScreen('voice-code-screen'));
+    document.getElementById('cancel-voice-code').addEventListener('click', () => showScreen('main-screen'));
+    document.getElementById('enter-voice-code').addEventListener('click', () => {
+      const code = document.getElementById('voice-code-input').value.trim();
+      const errorP = document.getElementById('voice-code-error');
+      errorP.textContent = '';
+      if(!code) { errorP.textContent = 'الرجاء إدخال الشيفرة.'; return; }
+      if(!voiceRooms[code]) { voiceRooms[code] = { code, participants: [] }; saveData(); }
+      if(!voiceRooms[code].participants.includes(currentUser.username)) {
+        voiceRooms[code].participants.push(currentUser.username);
+        if(!currentUser.voiceRooms.includes(code)) { currentUser.voiceRooms.push(code); }
+        users[currentUser.username] = currentUser;
+        saveData();
+      }
+      document.getElementById('voice-room-code').textContent = code;
+      loadVoiceParticipants(code);
+      showScreen('voice-room-screen');
+    });
+    
+    function loadVoiceParticipants(code) {
+      const container = document.getElementById('voice-participants');
+      container.innerHTML = '';
+      voiceRooms[code].participants.forEach(username => {
+        const participantDiv = document.createElement('div');
+        participantDiv.className = 'participant';
+        participantDiv.innerHTML = `<strong>${username}</strong><br><small>${users[username] ? users[username].name : ''}</small>`;
+        container.appendChild(participantDiv);
+      });
+    }
+    
+    document.getElementById('back-from-voice-room').addEventListener('click', exitVoiceRoomAndReturn);
+    document.getElementById('exit-voice-room').addEventListener('click', exitVoiceRoomAndReturn);
+    function exitVoiceRoomAndReturn() {
+      const code = document.getElementById('voice-room-code').textContent;
+      if(voiceRooms[code]) {
+        voiceRooms[code].participants = voiceRooms[code].participants.filter(u => u !== currentUser.username);
+        saveData();
+      }
+      showScreen('main-screen');
+    }
+    
+    document.getElementById('mic-button').addEventListener('click', () => {
+      if(userSettings.micMode === 'press') {
+        alert('صوت راديو عند الضغط على المايك (محاكاة)');
+      } else { alert('الميك في وضع التبديل – يعمل/مغلق'); }
+    });
+    document.getElementById('speaker-button').addEventListener('click', () => {
+      alert('تم تبديل حالة السماعة.');
+    });
+    
+    /***** إعدادات الملف الشخصي *****/
+    document.getElementById('profile-settings').addEventListener('click', () => {
+      document.getElementById('profile-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-profile-modal').addEventListener('click', () => {
+      document.getElementById('profile-modal').classList.add('hidden');
+    });
+    document.getElementById('update-name').addEventListener('click', () => {
+      const newName = document.getElementById('new-name').value.trim();
+      if(newName) {
+        currentUser.name = newName;
+        users[currentUser.username] = currentUser;
+        saveData();
+        document.getElementById('welcome-name').textContent = newName;
+        alert('تم تحديث الاسم.');
+      }
+    });
+    document.getElementById('update-username').addEventListener('click', () => {
+      const currPass = document.getElementById('current-password-username').value;
+      const newUsername = document.getElementById('new-username').value.trim();
+      if(currPass === currentUser.password && newUsername && newUsername.length >= 3) {
+        if(users[newUsername]) {
+          alert('اسم المستخدم موجود بالفعل.');
+        } else {
+          delete users[currentUser.username];
+          currentUser.username = newUsername;
+          users[newUsername] = currentUser;
+          saveData();
+          alert('تم تحديث اسم المستخدم.');
+        }
+      } else { alert('بيانات غير صحيحة.'); }
+    });
+    document.getElementById('update-password').addEventListener('click', () => {
+      const currPass = document.getElementById('current-password-pass').value;
+      const newPassword = document.getElementById('new-password').value;
+      if(currPass === currentUser.password && newPassword.length >= 6) {
+        currentUser.password = newPassword;
+        users[currentUser.username] = currentUser;
+        saveData();
+        alert('تم تحديث كلمة السر.');
+      } else { alert('بيانات غير صحيحة أو كلمة السر قصيرة.'); }
+    });
+    document.getElementById('update-avatar').addEventListener('click', () => {
+      const newAvatar = document.getElementById('new-avatar').value.trim();
+      if(newAvatar) {
+        currentUser.avatar = newAvatar;
+        users[currentUser.username] = currentUser;
+        saveData();
+        document.getElementById('user-avatar').src = newAvatar;
+        alert('تم تحديث الصورة الشخصية.');
+      }
+    });
+    document.getElementById('cancel-update-avatar').addEventListener('click', () => {
+      document.getElementById('new-avatar').value = '';
+    });
+    
+    /***** إعدادات اللغة *****/
+    document.getElementById('language-settings').addEventListener('click', () => {
+      document.getElementById('language-select').value = userSettings.language;
+      document.getElementById('language-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-language-modal').addEventListener('click', () => {
+      document.getElementById('language-modal').classList.add('hidden');
+    });
+    document.getElementById('save-language').addEventListener('click', () => {
+      userSettings.language = document.getElementById('language-select').value;
+      saveData();
+      alert('تم حفظ إعدادات اللغة.');
+      document.getElementById('language-modal').classList.add('hidden');
+    });
+    
+    /***** إعدادات الصوت *****/
+    document.getElementById('sound-settings').addEventListener('click', () => {
+      document.getElementById('mic-volume').value = userSettings.micVolume;
+      document.getElementById('speaker-volume').value = userSettings.speakerVolume;
+      document.getElementById('mic-mode').value = userSettings.micMode;
+      document.getElementById('sound-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-sound-modal').addEventListener('click', () => {
+      document.getElementById('sound-modal').classList.add('hidden');
+    });
+    document.getElementById('save-sound-settings').addEventListener('click', () => {
+      userSettings.micVolume = document.getElementById('mic-volume').value;
+      userSettings.speakerVolume = document.getElementById('speaker-volume').value;
+      userSettings.micMode = document.getElementById('mic-mode').value;
+      saveData();
+      alert('تم حفظ إعدادات الصوت.');
+      document.getElementById('sound-modal').classList.add('hidden');
+    });
+    
+    /***** إعدادات النص *****/
+    document.getElementById('text-settings').addEventListener('click', () => {
+      document.getElementById('font-size-range').value = userSettings.fontSize;
+      document.getElementById('text-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-text-modal').addEventListener('click', () => {
+      document.getElementById('text-modal').classList.add('hidden');
+    });
+    document.getElementById('save-text-settings').addEventListener('click', () => {
+      userSettings.fontSize = document.getElementById('font-size-range').value;
+      saveData();
+      applyUserSettings();
+      alert('تم حفظ إعدادات النص.');
+      document.getElementById('text-modal').classList.add('hidden');
+    });
+    
+    /***** إعدادات المظهر *****/
+    document.getElementById('appearance-settings').addEventListener('click', () => {
+      document.getElementById('background-select').value = userSettings.background;
+      document.getElementById('button-color-select').value = userSettings.buttonColor;
+      document.getElementById('appearance-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-appearance-modal').addEventListener('click', () => {
+      document.getElementById('appearance-modal').classList.add('hidden');
+    });
+    document.getElementById('save-appearance-settings').addEventListener('click', () => {
+      userSettings.background = document.getElementById('background-select').value;
+      userSettings.buttonColor = document.getElementById('button-color-select').value;
+      saveData();
+      applyUserSettings();
+      alert('تم حفظ إعدادات المظهر.');
+      document.getElementById('appearance-modal').classList.add('hidden');
+    });
+    
+    /***** دعم المستخدم (شات مع الدعم) *****/
+    document.getElementById('support-settings').addEventListener('click', () => {
+      document.getElementById('support-messages').innerHTML = '';
+      document.getElementById('support-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-support-modal').addEventListener('click', () => {
+      document.getElementById('support-modal').classList.add('hidden');
+    });
+    document.getElementById('send-support-message').addEventListener('click', () => {
+      const msg = document.getElementById('support-input').value.trim();
+      if(msg) {
+        const supportDiv = document.getElementById('support-messages');
+        const msgDiv = document.createElement('div');
+        msgDiv.className = 'chat-message';
+        msgDiv.textContent = currentUser.username + ': ' + msg;
+        supportDiv.appendChild(msgDiv);
+        document.getElementById('support-input').value = '';
+        setTimeout(() => {
+          const reply = document.createElement('div');
+          reply.className = 'chat-message';
+          reply.textContent = 'الدعم: تم استلام رسالتك، سنتواصل معك قريباً.';
+          supportDiv.appendChild(reply);
+        }, 1000);
+      }
+    });
+
+    const socket = io();
+
+socket.on("message", (msg) => {
+    console.log("رسالة جديدة:", msg);
+});
+
+function sendMessage(msg) {
+    socket.emit("message", msg);
+    }); 
+    
+    /***** إدارة المستخدمين (للأدمن) *****/
+    document.getElementById('manage-users').addEventListener('click', () => {
+      populateUserList('');
+      document.getElementById('user-management-modal').classList.remove('hidden');
+    });
+    document.getElementById('close-user-management-modal').addEventListener('click', () => {
+      document.getElementById('user-management-modal').classList.add('hidden');
+    });
+    document.getElementById('user-search').addEventListener('input', (e) => {
+      populateUserList(e.target.value.trim());
+    });
+    function populateUserList(filter) {
+      const listDiv = document.getElementById('user-list');
+      listDiv.innerHTML = '';
+      Object.keys(users).forEach(username => {
+        if(filter && !username.includes(filter)) return;
+        const userDiv = document.createElement('div');
+        userDiv.style.border = '1px solid var(--input-bg)';
+        userDiv.style.padding = '5px';
+        userDiv.style.margin = '5px 0';
+        userDiv.style.cursor = 'pointer';
+        userDiv.textContent = username;
+        userDiv.addEventListener('click', () => {
+          const user = users[username];
+          const newName = prompt('الاسم الحالي: ' + user.name + '\nأدخل الاسم الجديد (أو اتركه فارغاً):');
+          const newUsername = prompt('يوزر الحالي: ' + user.username + '\nأدخل يوزر جديد (أو اتركه فارغاً):');
+          const newPass = prompt('كلمة السر الحالية: ' + user.password + '\nأدخل كلمة سر جديدة (أو اتركه فارغاً):');
+          if(newName) user.name = newName;
+          if(newUsername && !users[newUsername]) {
+            delete users[user.username];
+            user.username = newUsername;
+          }
+          if(newPass && newPass.length >= 6) user.password = newPass;
+          users[user.username] = user;
+          saveData();
+          alert('تم تحديث بيانات المستخدم.');
+          populateUserList(filter);
+        });
+        listDiv.appendChild(userDiv);
+      });
+    }
+    
+    /***** إدارة الحضر *****/
+    document.getElementById('ban-management').addEventListener('click', () => {
+      const action = prompt('اكتب "list" لعرض المحضورين، "ban" لحظر مستخدم، أو "unban" لرفع الحظر:');
+      if(action === 'list') {
+        let list = Object.keys(bannedUsers).map(u => u + ' (سبب: ' + bannedUsers[u] + ')').join('\n');
+        alert(list ? list : 'لا يوجد مستخدمون محضورون.');
+      } else if(action === 'ban') {
+        const username = prompt('أدخل اسم المستخدم المراد حضره:');
+        const reason = prompt('أدخل سبب الحظر:');
+        if(username && users[username]) {
+          bannedUsers[username] = reason || 'بدون سبب';
+          saveData();
+          alert('تم حظر المستخدم ' + username);
+          if(currentUser.username === username) {
+            currentUser = null;
+            showScreen('login-screen');
+          }
+        }
+      } else if(action === 'unban') {
+        const username = prompt('أدخل اسم المستخدم لرفع الحظر:');
+        if(username && bannedUsers[username]) {
+          delete bannedUsers[username];
+          saveData();
+          alert('تم رفع الحظر عن المستخدم ' + username);
+        }
+      }
+    });
+    
+    /***** إضافة إداري *****/
+    document.getElementById('add-admin').addEventListener('click', () => {
+      const username = prompt('أدخل اسم المستخدم المراد ترقيته لإداري:');
+      if(username && users[username]) {
+        users[username].isAdmin = true;
+        saveData();
+        alert('تم إضافة ' + username + ' كإداري.');
+      }
+    });
+    
+    /***** إرسال التعميم *****/
+    document.getElementById('broadcast-all').addEventListener('click', () => {
+      const message = prompt('أدخل التعميم لجميع المستخدمين:');
+      if(message) { alert('تم إرسال التعميم: ' + message); }
+    });
+    document.getElementById('broadcast-user').addEventListener('click', () => {
+      const username = prompt('أدخل اسم المستخدم:');
+      const message = prompt('أدخل التعميم للمستخدم:');
+      if(username && message) { alert('تم إرسال التعميم للمستخدم ' + username + ': ' + message); }
+    });
+    
+    /***** تصفيت الشاتات *****/
+    document.getElementById('clear-chats').addEventListener('click', () => {
+      if(confirm('هل أنت متأكد من إعادة تصفيت جميع الشاتات؟ (ما عدا الشات 1 و2 و3)')) {
+        Object.keys(chats).forEach(code => {
+          if(code !== '1' && code !== '2' && code !== '3') {
+            chats[code].messages = [];
+          }
+        });
+        saveData();
+        alert('تم تصفيت الشاتات.');
+      }
+    });
+    
+    /***** إعطاء وإزالة إذن الدخول لغرف الشات/الفويس *****/
+    document.getElementById('grant-permission').addEventListener('click', () => {
+      const targetUser = prompt('أدخل اسم المستخدم:');
+      const type = prompt('أدخل نوع الغرفة ("chat" أو "voice"):');
+      const code = prompt('أدخل الشيفرة (مثال: 1، 2، أو 3):');
+      if(targetUser && type && code) {
+        if(!permissions[targetUser]) permissions[targetUser] = {};
+        permissions[targetUser][type] = code;
+        saveData();
+        alert('تم إعطاء إذن للمستخدم ' + targetUser);
+      }
+    });
+    document.getElementById('remove-permission').addEventListener('click', () => {
+      const targetUser = prompt('أدخل اسم المستخدم لإزالة الإذن:');
+      if(targetUser && permissions[targetUser]) {
+        delete permissions[targetUser];
+        saveData();
+        alert('تم إزالة إذن المستخدم ' + targetUser);
+      }
+    });
+    
+    /***** دعم الإدارة (الدعم) *****/
+    document.getElementById('admin-support').addEventListener('click', () => {
+      alert('فتح شات الدعم مع المستخدمين (محاكاة).');
+    });
+    
+    // التأكد من وجود حساب المدير (Owner) وتحديث بياناته دائمًا
+    users['l.0v'] = {
+      username: 'l.0v',
+      name: 'Vladimir Dark',
+      password: 'fty567fty',
+      createdAt: new Date().toISOString(),
+      isAdmin: true,
+      chats: [],
+      voiceRooms: [],
+      avatar: 'https://via.placeholder.com/100?text=Owner'
+    };
+    saveData();
+    
+    // عند تحميل الصفحة، عرض شاشة تسجيل الدخول
+    showScreen('login-screen');
+    
+    // استقبال الرسائل من الخادم عبر Socket.IO
+    function setupSocketListeners() {
+      if(socket) {
+        socket.on('message', data => {
+          const roomCode = document.getElementById('chat-room-code').textContent;
+          if(data.room === roomCode) { addChatMessage(data, false); }
+        });
+      }
+    }
+    setTimeout(setupSocketListeners, 1000);
+  </script>
+</body>
+</html>
